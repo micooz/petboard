@@ -1,0 +1,99 @@
+name: Web
+
+# 网页的检查、静态导出和发布都在这里：PR 上只做检查（typecheck → vitest → 静态导出），
+# 推到 main 时多一步把 out/ 发到 GitHub Pages。这样这份产物只被构建一次，
+# 也就不会出现"检查绿了但发布用的是另一次构建"的错位。
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "web/**"
+      # 网页的帧语义镜像要吃 fm-core 生成的 fixture，业务词表也在那里
+      - "crates/fm-core/src/wire/**"
+      - "crates/fm-core/tests/fixtures/**"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - "crates/fm-core/src/wire/**"
+      - "crates/fm-core/tests/fixtures/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 每个 ref 各自成组：PR 的检查不会取消 main 上正在进行的发布；
+# 同一分支连续推送时新的一次仍会取消旧的。
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Web checks + static export
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 12
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 格式的 WASM 产物（src/wasm/pkg/）已随仓库跟踪，这里不需要 rust 工具链：
+      # 改了 crates/anmfmt|bmpfmt|wasmfmt 的人要在本地重跑 `pnpm wasm` 并把产物一起提交。
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # 帧切分 fixture 在这里被 TS 镜像重放，跨语言契约的另一半靠它守
+      - name: Unit tests
+        run: pnpm test
+
+      # 先检查后构建：测试红了就走不到产物这一步
+      - name: Build static export
+        run: pnpm build
+        env:
+          # 项目页挂在 https://<user>.github.io/<repo>/ 下，basePath 必须带上仓库名
+          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+
+      # GitHub Pages 默认会跑 Jekyll，`_next/` 这种下划线开头的目录会被它吃掉
+      - name: Disable Jekyll
+        run: touch out/.nojekyll
+
+      # PR 上只当构建检查，不上传产物：fork 的 GITHUB_TOKEN 是只读的，上传 pages artifact 会失败
+      - name: Upload artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: web/out
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5

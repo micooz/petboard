@@ -1,0 +1,32 @@
+[package]
+name         = "fm-core"
+edition      = "2024"
+rust-version = "1.95"
+version      = "1.0.0"
+description  = "两块板共用的固件逻辑：业务报文层（命令/应答/事件）、命令实现、播放引擎、屏幕与卡访问"
+
+[features]
+# 生成网页侧的常量与跨语言 fixture（`wiregen`）：只在 host 上用，固件不依赖它
+gen = []
+
+[[bin]]
+name = "wiregen"
+path = "src/bin/wiregen.rs"
+required-features = ["gen"]
+
+[dependencies]
+defmt = "1.0.1"
+embassy-time = { version = "0.5.0", features = ["defmt"] }
+embedded-graphics = "0.8.2"
+embedded-sdmmc = { version = "0.10.0", default-features = false, features = ["defmt-log"] }
+anmfmt = { path = "../anmfmt" }
+serial = { path = "../serial" }
+
+[profile.dev]
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1
+debug         = 2
+lto           = 'fat'
+opt-level     = 's'

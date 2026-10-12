@@ -1,0 +1,54 @@
+[package]
+edition      = "2024"
+name         = "fm-esp-c6"
+rust-version = "1.95"
+version      = "1.0.0"
+description  = "Waveshare ESP32-C6-LCD-1.47（ST7789 172x320 + SPI TF 卡）"
+
+[[bin]]
+name = "pet-board-c6"
+path = "./src/main.rs"
+
+[dependencies]
+esp-hal = { version = "~1.2.2", features = ["defmt", "esp32c6", "unstable"] }
+
+esp-rtos = { version = "0.4.0", features = [
+  "defmt",
+  "embassy",
+  "esp-alloc",
+  "esp32c6",
+] }
+
+defmt                  = "1.0.1"
+esp-bootloader-esp-idf = { version = "0.6.0", features = ["defmt", "esp32c6"] }
+
+esp-alloc = { version = "0.11.0", features = ["defmt", "esp32c6"] }
+esp-backtrace = { version = "0.20.0", features = [
+  "defmt",
+  "esp32c6",
+  "panic-handler",
+] }
+esp-println = { version = "0.18.0", features = ["defmt-espflash", "esp32c6"] }
+embassy-executor = { version = "0.10.0", features = ["defmt"] }
+embassy-time = { version = "0.5.0", features = ["defmt"] }
+
+critical-section = "1.2.0"
+# esp-hal 的 `read_byte` / `write_byte_nb` 返回 `nb::Result`；适配成 `fm_core::Serial` 时
+# 要按变体分类。用同一个 nb（1.x）不会引入第二份
+nb = "1.1.0"
+static_cell      = "2.1.1"
+embedded-graphics = "0.8.2"
+mipidsi = "0.10.0"
+embedded-hal-bus = "0.3.0"
+embedded-sdmmc = { version = "0.10.0", default-features = false, features = ["defmt-log"] }
+fm-core = { path = "../fm-core" }
+
+
+[profile.dev]
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1     # LLVM can perform better optimizations using a single thread
+debug         = 2     # prefer slower builds but better debugging experience
+lto           = 'fat'
+opt-level     = 's'

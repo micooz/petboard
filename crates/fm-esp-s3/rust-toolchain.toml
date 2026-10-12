@@ -1,0 +1,6 @@
+[toolchain]
+# ESP32-S3 是 Xtensa，rustup 官方没有这个 target：要先用 `espup install` 装
+# esp-rs 的 fork 工具链（它同时带上 xtensa-esp32s3-none-elf 与 riscv 的目标）。
+channel    = "esp"
+components = ["rust-src"]
+targets    = ["xtensa-esp32s3-none-elf"]

@@ -1,0 +1,69 @@
+[package]
+edition      = "2024"
+name         = "fm-esp-s3"
+rust-version = "1.95"
+version      = "1.0.0"
+description  = "ESP32-S3 3.5 寸 IPS（ST77922 QSPI 320x480 + SDIO TF 卡 + 8MB PSRAM）"
+
+[[bin]]
+name = "pet-board-s3"
+path = "./src/main.rs"
+
+[features]
+# 点灯卡：上板画一张自证的测试图（角标方向 / 对齐补边 / 整屏覆盖 / MADCTL 逐趟试），
+# 用来判断"窗口映射有没有写反、面板认不认 MADCTL"。见 `src/testcard.rs`。
+lcd-test = []
+
+[dependencies]
+esp-hal = { version = "~1.2.2", features = ["defmt", "esp32s3", "unstable"] }
+
+esp-rtos = { version = "0.4.0", features = [
+  "defmt",
+  "embassy",
+  "esp-alloc",
+  "esp32s3",
+] }
+
+defmt                  = "1.0.1"
+esp-bootloader-esp-idf = { version = "0.6.0", features = ["defmt", "esp32s3"] }
+
+esp-alloc = { version = "0.11.0", features = ["defmt", "esp32s3"] }
+esp-backtrace = { version = "0.20.0", features = [
+  "defmt",
+  "esp32s3",
+  "panic-handler",
+] }
+esp-println = { version = "0.18.0", features = ["defmt-espflash", "esp32s3"] }
+embassy-executor = { version = "0.10.0", features = ["defmt"] }
+embassy-time = { version = "0.5.0", features = ["defmt"] }
+
+critical-section = "1.2.0"
+# esp-hal 的 `read_byte` / `write_byte_nb` 返回 `nb::Result`；适配成 `fm_core::Serial` 时
+# 要按变体分类。用同一个 nb（1.x）不会引入第二份
+nb = "1.1.0"
+static_cell      = "2.1.1"
+embedded-graphics = "0.8.2"
+embedded-sdmmc = { version = "0.10.0", default-features = false, features = ["defmt-log"] }
+# SDIO 卡协议栈：esp-hal 的 `sdmmc::Slot` 实现了它的 `MmcBus`，
+# 由它跑完 SD 卡的初始化状态机，再经 `sdio_block` 垫成 `embedded-sdmmc` 认的块设备
+sdio = { version = "0.5", features = ["defmt"] }
+# `sdio` 的 `BusAdapter` 要 embedded-hal-async 的 `DelayNs`（异步延时），
+# 而 esp-hal 的 `Delay` 只实现同步的那个 —— 中间垫一个忙等的适配器（见 `sdio_block.rs`）
+embedded-hal = "1.0.0"
+embedded-hal-async = "1.0.0"
+aligned = "0.4.2"
+# 把 `sdio` 的异步块设备在同步的 `embedded_sdmmc::BlockDevice` 里跑完
+embassy-futures = "0.1.2"
+# `sdio` 的块设备通过这个 trait 暴露 read/write/size
+block-device-driver = "0.2.0"
+fm-core = { path = "../fm-core" }
+
+
+[profile.dev]
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1
+debug         = 2
+lto           = 'fat'
+opt-level     = 's'

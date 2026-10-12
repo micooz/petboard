@@ -1,0 +1,7 @@
+[package]
+name = "anmfmt"
+version = "0.1.0"
+edition = "2021"
+description = "ESP32 GIF 播放用的 .ANM 动画格式"
+
+[dependencies]

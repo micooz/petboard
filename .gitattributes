@@ -1,0 +1,2 @@
+# 格式 WASM 的产物随仓库跟踪：二进制不做文本 diff / 三方合并
+web/src/wasm/pkg/** binary

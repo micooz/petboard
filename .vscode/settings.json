@@ -1,0 +1,17 @@
+{
+  // 显式列出 manifest：RA 不再自动扫描（含各 crate 的 target），crates/* 才按 host 目标解析。
+  // 两个板子 crate 各自有 .cargo/config.toml 定 target（C6 是 riscv、S3 是 xtensa），
+  // 所以它们在这里只是"能被 RA 找到"，实际编译参数以各自的 config 为准。
+  "rust-analyzer.linkedProjects": [
+    "crates/fm-core/Cargo.toml",
+    "crates/fm-esp-c6/Cargo.toml",
+    "crates/fm-esp-s3/Cargo.toml",
+    "crates/anmfmt/Cargo.toml",
+    "crates/bmpfmt/Cargo.toml",
+    "crates/serial/Cargo.toml"
+  ],
+  // 板子 crate 是 no_std + 交叉目标，--all-targets 会构造需要 std::test 的 harness → E0463 飘红
+  "rust-analyzer.check.allTargets": false,
+  "rust-analyzer.check.command": "clippy",
+  "rust-analyzer.check.features": "all"
+}

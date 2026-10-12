@@ -1,0 +1,7 @@
+[package]
+name = "serial"
+version = "0.1.0"
+edition = "2021"
+description = "通用串口线路协议：哨兵成帧、消息 ID 配对、传输标签槽、块 ACK、TX FIFO 节流与通知队列（不含任何业务语义）"
+
+[dependencies]

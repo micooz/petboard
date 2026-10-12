@@ -1,0 +1,14 @@
+[package]
+name = "wasmfmt"
+version = "0.1.0"
+edition = "2021"
+description = "把 anmfmt / bmpfmt 的打包与解析交给网页的 WASM 门面"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anmfmt = { path = "../anmfmt" }
+bmpfmt = { path = "../bmpfmt" }
+# 版本必须和 `wasm-bindgen-cli` 一致；CI 从这一行读版本号
+wasm-bindgen = "=0.2.129"

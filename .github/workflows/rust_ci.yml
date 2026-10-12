@@ -1,0 +1,90 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "crates/**"
+      # fm-core 的 wire_contract 会逐个常量比对网页侧的生成物，它过期了要能在这里红
+      - "web/src/lib/serial/wire.ts"
+      - ".github/workflows/rust_ci.yml"
+  pull_request:
+    paths:
+      - "crates/**"
+      - "web/src/lib/serial/wire.ts"
+      - ".github/workflows/rust_ci.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # 共用逻辑层：命令、播放引擎、串口协议、屏幕与卡访问的纯逻辑。
+  # 它不依赖芯片，所以能在 host 上直接测 —— 播放引擎里那些取整/对齐就靠它守着。
+  # 线路协议的跨语言契约也在这里守（tests/wire_contract.rs 比对生成的 wire.ts，
+  # 帧切分 fixture 由网页那步 vitest 重放，见 pages.yml），CI 不再重新生成这两份生成物。
+  core:
+    name: fm-core
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: crates/fm-core
+    strategy:
+      fail-fast: false
+      matrix:
+        action:
+          - command: test
+            args: ""
+          - command: fmt
+            args: --all -- --check
+          # --features gen：把生成器（wiregen + codegen）也纳入 clippy
+          - command: clippy
+            args: --all-targets --features gen -- -D warnings
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - name: Enable caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/fm-core
+      - name: Run command
+        run: cargo ${{ matrix.action.command }} ${{ matrix.action.args }}
+
+  # 共享 crate：格式库（anmfmt/bmpfmt）是"网页该编出什么字节"的权威参考；
+  # serial 是**通用线路机制**（哨兵成帧、消息 ID 配对、标签槽、块 ACK、节流、通知
+  # 队列），里面没有也不该有任何业务词；wasmfmt 是网页那层 WASM 门面（在 host 上测它的
+  # 搬运逻辑，wasm 产物已随仓库跟踪，谁改格式谁重跑 `pnpm wasm` 并把产物一起提交）。
+  crates:
+    name: Format crates
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate: [crates/anmfmt, crates/bmpfmt, crates/serial, crates/wasmfmt]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - name: Enable caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ matrix.crate }}
+      - name: Test
+        working-directory: ${{ matrix.crate }}
+        run: cargo test
+      - name: Format
+        working-directory: ${{ matrix.crate }}
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        working-directory: ${{ matrix.crate }}
+        run: cargo clippy --all-targets -- -D warnings

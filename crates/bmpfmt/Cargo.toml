@@ -1,0 +1,7 @@
+[package]
+name = "bmpfmt"
+version = "0.1.0"
+edition = "2021"
+description = "BMP 格式的权威实现（24 位、无压缩、自下而上）：网页打包照着它写，板子用它读"
+
+[dependencies]

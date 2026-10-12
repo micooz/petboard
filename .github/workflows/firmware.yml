@@ -1,0 +1,70 @@
+name: Firmware
+
+# 两块板子只差工具链：C6 是 RISC-V（rustup 自带 target），S3 是 Xtensa（esp-rs fork）。
+# 板子的 .cargo/config.toml 钉死了 target / runner，所以每条 cargo 命令都要在各自目录里跑。
+# 这里是唯一在无硬件的情况下编译板子程序的地方。
+#
+# 注意：合成一个文件后 paths 只能取并集，只改 crates/fm-esp-c6/** 也会连 S3 一起重建。
+# 要按板子过滤触发路径就得拆回两个文件，或者引入一个 paths-filter 动作 —— 为了两个目录
+# 多养一份第三方动作不划算，这里接受多编一块板子的代价。
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "crates/**"
+      - ".github/workflows/firmware.yml"
+  pull_request:
+    paths:
+      - "crates/**"
+      - ".github/workflows/firmware.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  firmware:
+    name: Firmware (${{ matrix.board == 'c6' && 'ESP32-C6' || 'ESP32-S3' }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [c6, s3]
+        action:
+          - command: build
+            args: --release
+          - command: fmt
+            args: --all -- --check
+          - command: clippy
+            args: -- -D warnings
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      # C6：RISC-V target 随 rustup 一起装
+      - name: Setup Rust (RISC-V)
+        if: matrix.board == 'c6'
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          target: riscv32imac-unknown-none-elf
+          toolchain: stable
+          components: rust-src, rustfmt, clippy
+
+      # S3：Xtensa 目标不在 rustup 里，用 esp-rs 官方的工具链安装动作
+      - name: Setup Rust (esp-rs)
+        if: matrix.board == 's3'
+        uses: esp-rs/xtensa-toolchain@v1.6
+        with:
+          default: true
+          buildtargets: esp32s3
+          ldproxy: false
+
+      - name: Enable caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/fm-esp-${{ matrix.board }}
+
+      - name: Run command
+        working-directory: crates/fm-esp-${{ matrix.board }}
+        run: cargo ${{ matrix.action.command }} ${{ matrix.action.args }}
