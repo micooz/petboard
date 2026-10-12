@@ -42,13 +42,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      # C6：RISC-V target 随 rustup 一起装
+      # C6：RISC-V target 随 rustup 一起装。
+      # toolchain 要和 crates/fm-esp-c6/rust-toolchain.toml 钉的 channel 一致：
+      # 板子目录里的 override 会让 cargo 走 nightly，装在 stable 上的组件用不到。
       - name: Setup Rust (RISC-V)
         if: matrix.board == 'c6'
         uses: dtolnay/rust-toolchain@v1
         with:
           target: riscv32imac-unknown-none-elf
-          toolchain: stable
+          toolchain: nightly
           components: rust-src, rustfmt, clippy
 
       # S3：Xtensa 目标不在 rustup 里，用 esp-rs 官方的工具链安装动作
