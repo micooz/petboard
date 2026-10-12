@@ -49,9 +49,9 @@
 
 ### 技术栈
 
-- **Node.js 22+ 和 PNPM**：负责开发网页控制台。
-- **Rust Nightly**：负责编译 Rust 代码和 WASM。
-- **espup 工具链**：负责编译 ESP32 S3 的 Xtensa 固件（注意 C6 是 RISC-V 无需 espup）。
+- **Node.js & PNPM**：负责开发网页控制台。
+- **Rust & Rustup**：负责编译 Rust 代码和 WASM。
+- **espup**：负责编译 ESP32 S3 的 Xtensa 固件（注意 C6 是 RISC-V 无需 espup）。
 - **espflash**：负责烧录固件。
 
 ## 项目结构
@@ -76,7 +76,7 @@ petboard/
 │   ├── src/lib/          # 编码器、缓存、播放状态与串口客户端
 │   │   ├── encode/       # 图片 / GIF / WebP → 卡上格式的编码入口
 │   │   └── serial/       # Web Serial 传输层与生成的线路常量
-│   ├── src/wasm/pkg/     # 已提交的格式 WASM 产物
+│   ├── src/wasm/pkg/     # wasmfmt 的构建产物
 │   └── tests/            # Vitest 测试，目录结构与 src/ 镜像
 ├── scripts/              # web.sh（开发服务器）、flash-c6.sh / flash-s3.sh（构建 + 烧录）
 ├── docs/                 # 中文笔记：嵌入式术语表、.ANM 规范、两块板的硬件资料
@@ -108,18 +108,18 @@ petboard/
 
 ## 学习文档
 
-| 文件                       | 内容                |
-|----------------------------|---------------------|
-| `docs/basics.md`           | 嵌入式通用知识      |
-| `docs/anm-format.md`       | `.ANM` 动画格式规范 |
-| `docs/esp32-c6-lcd-147.md` | C6 板的相关信息     |
-| `docs/esp32-s3-lcd-35.md`  | S3 板的相关信息     |
+| 文件                                                     | 内容                |
+|----------------------------------------------------------|---------------------|
+| [`docs/basics.md`](docs/basics.md)                       | 嵌入式通用知识      |
+| [`docs/anm-format.md`](docs/anm-format.md)               | `.ANM` 动画格式规范 |
+| [`docs/esp32-c6-lcd-147.md`](docs/esp32-c6-lcd-147.md)   | C6 板的相关信息     |
+| [`docs/esp32-s3-lcd-35.md`](docs/esp32-s3-lcd-35.md)     | S3 板的相关信息     |
 
 ## 已知限制与注意事项
 
 - **microSD 卡文件系统**：必须格式化为 `FAT32`，不支持 exFAT。
 - **串口独占**：`espflash` 的监视器和网页的 Web Serial 同一时刻只能开一个。
-- **协议版本要对齐**：当前 `API_VERSION = 1`，改协议要同时重刷两块板并重跑 `pnpm wire`。
+- **要对齐的协议**：串口报文（`API_VERSION`）、卡上格式（`.ANM`）和播放清单（`data/PLAYLIST`）都是网页和固件共用的约定，改哪一处都要两边一起更新（含 `pnpm wire` / `pnpm wasm` 的生成物）。
 
 ## 示例素材
 
