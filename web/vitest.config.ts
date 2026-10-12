@@ -2,6 +2,10 @@ import { fileURLToPath } from 'node:url';
 
 import { defineConfig } from 'vitest/config';
 
+// 设备日志按本地时区分桶、按本地时钟格式化，断言里写死了 +08:00 的期望值。
+// 固定成同一个时区，免得 CI（UTC）和不同机器把这几条测试打飘。
+process.env.TZ = 'Asia/Shanghai';
+
 export default defineConfig({
   resolve: {
     // 和 tsconfig 里的 `@/*` 对齐（Vitest 不会自己读 tsconfig 的 paths）
