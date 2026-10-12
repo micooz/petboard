@@ -12,7 +12,7 @@
     <th align="center">网页控制台</th>
   </tr>
   <tr>
-    <td><video src="https://github.com/user-attachments/assets/<uuid>" width="480" controls></video></td>
+    <td><video src="https://github.com/user-attachments/assets/fe2f12ff-b4e7-4b61-a30c-0fe6dbe2a516" width="480" controls></video></td>
     <td><img src="pet-board-web.png" width="480" alt="Pet Board 网页控制台"></td>
   </tr>
 </table>
