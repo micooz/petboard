@@ -2,7 +2,13 @@ name: Firmware
 
 # 两块板子只差工具链：C6 是 RISC-V（rustup 自带 target），S3 是 Xtensa（esp-rs fork）。
 # 板子的 .cargo/config.toml 钉死了 target / runner，所以每条 cargo 命令都要在各自目录里跑。
-# 这里是唯一在无硬件的情况下编译板子程序的地方。
+# 这里是唯一在无硬件的情况下编译板子程序的地方，也是发布的地方（见下）。
+#
+# 一块板子一个 job，fmt → clippy → build 串在同一个 job 里：三样共用一次工具链安装
+# （S3 的 esp-rs 工具链装一次要一分钟左右），代价是墙钟时间比三 job 并行略长。
+#
+# 发布：推 `v*` tag 时，build 之后多跑一步 `espflash save-image` 得到合并镜像，两块板子
+# 的镜像 + ELF 一起发到 Releases。
 #
 # 注意：合成一个文件后 paths 只能取并集，只改 crates/fm-esp-c6/** 也会连 S3 一起重建。
 # 要按板子过滤触发路径就得拆回两个文件，或者引入一个 paths-filter 动作 —— 为了两个目录
@@ -11,6 +17,9 @@ on:
   push:
     branches:
       - main
+    # tag 推送不评估 paths 过滤，所以 `v*` 一定进得来；下面的 paths 只约束 main 的推送。
+    tags:
+      - "v*"
     paths:
       - "crates/**"
       - ".github/workflows/firmware.yml"
@@ -22,22 +31,32 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # 发布时下载的 espflash 版本，写死以免 CI 生成的合并镜像和本地 dev 环境对不上。
+  ESPFLASH_VERSION: 4.6.0
 
 jobs:
   firmware:
-    name: Firmware (${{ matrix.board == 'c6' && 'ESP32-C6' || 'ESP32-S3' }})
+    name: Firmware (${{ matrix.label }})
+    env:
+      # 欢迎屏印的地址：线上控制台，和 pages.yml 的 basePath 同一个来源。
+      PET_BOARD_HINT_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        board: [c6, s3]
-        action:
-          - command: build
-            args: --release
-          - command: fmt
-            args: --all -- --check
-          - command: clippy
-            args: -- -D warnings
+        include:
+          - board: c6
+            label: ESP32-C6
+            bin: pet-board-c6
+            chip: esp32c6
+            triple: riscv32imac-unknown-none-elf
+            flash: 8mb
+          - board: s3
+            label: ESP32-S3
+            bin: pet-board-s3
+            chip: esp32s3
+            triple: xtensa-esp32s3-none-elf
+            flash: 16mb
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -67,6 +86,112 @@ jobs:
         with:
           workspaces: crates/fm-esp-${{ matrix.board }}
 
-      - name: Run command
+      # 顺序按"越快越先"排：fmt 挂了不用等 clippy / build。
+      - name: Format check
         working-directory: crates/fm-esp-${{ matrix.board }}
-        run: cargo ${{ matrix.action.command }} ${{ matrix.action.args }}
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        working-directory: crates/fm-esp-${{ matrix.board }}
+        run: cargo clippy -- -D warnings
+
+      - name: Build release
+        working-directory: crates/fm-esp-${{ matrix.board }}
+        run: cargo build --release
+
+      # 下面三步只在推 tag 时跑：平时（PR / main 推送）不装 espflash，让检查保持轻快。
+      # 直接拿 esp-rs 的 Linux 预编译包，不用 `cargo install` 现编（那步还要 libudev 头文件）。
+      - name: Install espflash
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          curl -sSL -o espflash.zip \
+            "https://github.com/esp-rs/espflash/releases/download/v${ESPFLASH_VERSION}/espflash-x86_64-unknown-linux-gnu.zip"
+          unzip -o espflash.zip -d "$HOME/.local/bin"
+          chmod +x "$HOME/.local/bin/espflash"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # 合并镜像 = bootloader + 分区表 + 应用，从 0x0 一把烧。
+      # --skip-padding：不补齐到整片 flash（8/16MB 的 0xFF 没必要塞进 release）。
+      - name: Build flashable image
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: crates/fm-esp-${{ matrix.board }}
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.triple }}/release/${{ matrix.bin }}" "dist/${{ matrix.bin }}.elf"
+          espflash save-image \
+            --chip ${{ matrix.chip }} \
+            --merge \
+            --skip-padding \
+            -s ${{ matrix.flash }} \
+            "target/${{ matrix.triple }}/release/${{ matrix.bin }}" \
+            "dist/${{ matrix.bin }}.bin"
+          ( cd dist && sha256sum "${{ matrix.bin }}.bin" "${{ matrix.bin }}.elf" > "${{ matrix.bin }}.sha256" )
+
+      - name: Upload firmware artifacts
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.bin }}
+          path: crates/fm-esp-${{ matrix.board }}/dist
+          if-no-files-found: error
+
+  # 发布单独一个 job：两块板子的检查全绿才建 release。
+  publish:
+    name: Publish release
+    needs: firmware
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      # 只有这一步需要写权限；上面的检查 job 保持默认只读。
+      contents: write
+    steps:
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          # 两个 artifact 里的文件名不重名（pet-board-c6.* / pet-board-s3.*），摊平到一层。
+          merge-multiple: true
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -l dist
+          cat > notes.md <<'NOTES'
+          两块板子的 release 固件，每块各两个文件：合并镜像（`.bin`）和带调试符号的 ELF（`.elf`）。
+
+          | 板子 | 产物 | 适用硬件 |
+          | --- | --- | --- |
+          | ESP32-C6 | `pet-board-c6.bin` / `.elf` | Waveshare ESP32-C6-LCD-1.47（ST7789 320×172） |
+          | ESP32-S3 | `pet-board-s3.bin` / `.elf` | ESP32-S3 LCD 3.5"（ST77922 QSPI 480×320 + SDIO TF 卡） |
+
+          `.bin` 是从 `0x0` 起始的合并镜像（bootloader + 分区表 + 应用），一把烧：
+
+          ```bash
+          espflash write-bin 0x0 pet-board-c6.bin
+          ```
+
+          也可以直接烧 ELF —— 它带 defmt 符号，串口日志能还原成文字：
+
+          ```bash
+          espflash flash --chip esp32c6 --log-format defmt pet-board-c6.elf
+          ```
+
+          把命令里的 `esp32c6` / `pet-board-c6` 换成 `esp32s3` / `pet-board-s3` 就是 S3。
+
+          > ⚠️ S3 的 `LCD_RST` 和芯片 `EN` 共用：烧完如果是黑屏，按一下板上的 RST 或拔插一次 USB。
+
+          `*.sha256` 是同一 release 里两个产物的校验和。
+
+          网页控制台：https://micooz.github.io/petboard/
+          NOTES
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Pet Board $TAG" \
+              --notes-file notes.md \
+              --verify-tag
+          fi
