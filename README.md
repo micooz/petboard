@@ -30,13 +30,14 @@
 
 **硬件**
 
-| 硬件   | ESP32-C6 LCD 1.47"          | ESP32-S3 LCD 3.5"                 |
-|--------|-----------------------------|-----------------------------------|
-| 芯片   | ESP32-C6，RISC-V 最高 160MHz | ESP32-S3R8，Xtensa 双核最高 240MHz |
-| Flash  | 8MB（封装在芯片内） / 无      | 16MB QSPI / 8MB OPI PSRAM         |
-| PSRAM  | 无                          | 8MB OPI                           |
-| 屏幕   | 1.47" ST7789，SPI，320×172    | 3.5" IPS ST77922，QSPI，480×320     |
-| 存储卡 | microSD，SPI                 | microSD，SDIO 4-bit                |
+| 硬件   | ESP32-C6 LCD 1.47"            | ESP32-S3 LCD 3.5"                 |
+|--------|-------------------------------|-----------------------------------|
+| 芯片   | ESP32-C6，RISC-V 最高 160MHz   | ESP32-S3R8，Xtensa 双核最高 240MHz |
+| Flash  | 8MB（封装在芯片内）             | 16MB QSPI                         |
+| SRAM   | 512KB（HP SRAM）+ 16KB（LP SRAM） | 512KB                             |
+| PSRAM  | 无                            | 8MB OPI                           |
+| 屏幕   | 1.47" ST7789，SPI，320×172      | 3.5" IPS ST77922，QSPI，480×320     |
+| 存储卡 | microSD，SPI                   | microSD，SDIO 4-bit                |
 
 **网页控制台**
 
@@ -108,16 +109,16 @@ petboard/
 
 ## 学习文档
 
-| 文件                                                     | 内容                |
-|----------------------------------------------------------|---------------------|
-| [`docs/basics.md`](docs/basics.md)                       | 嵌入式通用知识      |
-| [`docs/anm-format.md`](docs/anm-format.md)               | `.ANM` 动画格式规范 |
-| [`docs/esp32-c6-lcd-147.md`](docs/esp32-c6-lcd-147.md)   | C6 板的相关信息     |
-| [`docs/esp32-s3-lcd-35.md`](docs/esp32-s3-lcd-35.md)     | S3 板的相关信息     |
+| 文件                                                   | 内容                |
+|--------------------------------------------------------|---------------------|
+| [`docs/basics.md`](docs/basics.md)                     | 嵌入式通用知识      |
+| [`docs/anm-format.md`](docs/anm-format.md)             | `.ANM` 动画格式规范 |
+| [`docs/esp32-c6-lcd-147.md`](docs/esp32-c6-lcd-147.md) | C6 板的相关信息     |
+| [`docs/esp32-s3-lcd-35.md`](docs/esp32-s3-lcd-35.md)   | S3 板的相关信息     |
 
 ## 已知限制与注意事项
 
-- **microSD 卡文件系统**：必须格式化为 `FAT32`，不支持 exFAT。
+- **microSD 卡文件系统**：必须格式化为 `FAT32`，不支持 `exFAT`。
 - **串口独占**：`espflash` 的监视器和网页的 Web Serial 同一时刻只能开一个。
 - **要对齐的协议**：串口报文（`API_VERSION`）、卡上格式（`.ANM`）和播放清单（`data/PLAYLIST`）都是网页和固件共用的约定，改哪一处都要两边一起更新（含 `pnpm wire` / `pnpm wasm` 的生成物）。
 
