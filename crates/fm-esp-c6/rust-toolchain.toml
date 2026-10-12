@@ -1,4 +1,6 @@
 [toolchain]
 channel    = "nightly"
-components = ["rust-src"]
+# 这个目录里的 cargo 走 nightly：rustfmt / clippy 一并声明，
+# rustup 才会把它们随 rust-src 一起装上，否则 `cargo fmt`、`cargo clippy` 会报组件缺失。
+components = ["rust-src", "rustfmt", "clippy"]
 targets = ["riscv32imac-unknown-none-elf"]
